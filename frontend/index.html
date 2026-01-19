@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ko-pellet - Recipe Import for KitchenOwl</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>ko-pellet</h1>
+            <div class="header-actions">
+                <div id="userInfo" class="user-info hidden">
+                    <span id="userName"></span>
+                    <button id="logoutBtn" class="btn secondary small">Logout</button>
+                </div>
+                <button id="loginBtn" class="btn primary small hidden">Login</button>
+                <button id="settingsBtn" class="icon-btn" title="Settings">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                        <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                    </svg>
+                </button>
+                <button id="themeToggle" class="icon-btn" title="Toggle dark mode">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                        <path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 01-4.4 2.26 5.403 5.403 0 01-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Login Required Banner -->
+        <div id="loginBanner" class="login-banner hidden">
+            <p>Please log in to save recipes to KitchenOwl</p>
+            <button id="loginBannerBtn" class="btn primary">Login</button>
+        </div>
+
+        <main id="mainContent" class="hidden">
+            <!-- Stats Dashboard -->
+            <section id="statsSection" class="stats-section">
+                <div class="stats-header">
+                    <div class="badge-display" id="badgeDisplay">
+                        <span class="badge-icon">🦉</span>
+                        <div class="badge-info">
+                            <span class="badge-name" id="badgeName">Getting Started</span>
+                            <span class="badge-desc" id="badgeDesc">Import your first recipe!</span>
+                        </div>
+                    </div>
+                    <button id="toggleStats" class="icon-btn" title="Toggle stats">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <span class="stat-value" id="statTotalRecipes">0</span>
+                        <span class="stat-label">Recipes Saved</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="statSuccessRate">100%</span>
+                        <span class="stat-label">Success Rate</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="statTimeSaved">0h</span>
+                        <span class="stat-label">Time Saved</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="statAiCalls">0</span>
+                        <span class="stat-label">AI Parses</span>
+                    </div>
+                </div>
+                <div class="stats-details hidden" id="statsDetails">
+                    <div class="stats-row">
+                        <div class="stat-detail">
+                            <span class="detail-label">By Source</span>
+                            <div class="source-breakdown" id="sourceBreakdown">
+                                <span class="source-item"><span class="source-dot url"></span>URL: <strong id="statUrl">0</strong></span>
+                                <span class="source-item"><span class="source-dot image"></span>Image: <strong id="statImage">0</strong></span>
+                                <span class="source-item"><span class="source-dot text"></span>Text: <strong id="statText">0</strong></span>
+                            </div>
+                        </div>
+                        <div class="stat-detail">
+                            <span class="detail-label">Avg Confidence</span>
+                            <span class="detail-value" id="statAvgConfidence">-</span>
+                        </div>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat-detail">
+                            <span class="detail-label">Total Parsed</span>
+                            <span class="detail-value"><span id="statIngredients">0</span> ingredients, <span id="statInstructions">0</span> steps</span>
+                        </div>
+                        <div class="stat-detail">
+                            <span class="detail-label">Top Tags</span>
+                            <span class="detail-value" id="statTopTags">-</span>
+                        </div>
+                    </div>
+                    <div class="stats-row impact-row">
+                        <div class="stat-detail">
+                            <span class="detail-label">Paper Saved</span>
+                            <span class="detail-value"><span id="statPages">0</span> pages</span>
+                        </div>
+                        <div class="stat-detail">
+                            <span class="detail-label">Ink Saved</span>
+                            <span class="detail-value"><span id="statInk">0</span> cartridges</span>
+                        </div>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stat-detail last-recipe" id="lastRecipeSection">
+                            <span class="detail-label">Last Recipe</span>
+                            <span class="detail-value" id="statLastRecipe">-</span>
+                        </div>
+                    </div>
+                    <div class="next-badge" id="nextBadgeSection">
+                        <span class="next-badge-label">Next badge:</span>
+                        <span class="next-badge-name" id="nextBadgeName">Owlet</span>
+                        <span class="next-badge-progress" id="nextBadgeProgress">(10 more recipes)</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Intake Methods Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="url">URL Import</button>
+                <button class="tab" data-tab="image">Image Upload</button>
+                <button class="tab" data-tab="text">Paste Text</button>
+            </div>
+
+            <!-- URL Import -->
+            <section id="url-section" class="intake-section active">
+                <div class="input-group">
+                    <input type="url" id="recipeUrl" placeholder="Paste recipe URL here..." autocomplete="off">
+                    <button id="parseUrlBtn" class="btn primary">Import</button>
+                </div>
+                <p class="hint">Supports most recipe websites including AllRecipes, Food Network, NYT Cooking, and sites using schema.org/Recipe markup.</p>
+            </section>
+
+            <!-- Image Upload -->
+            <section id="image-section" class="intake-section">
+                <div class="upload-options">
+                    <button id="takePhotoBtn" class="btn primary photo-btn">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                            <circle cx="12" cy="12" r="3.2"/>
+                            <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+                        </svg>
+                        Take Photo
+                    </button>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+                </div>
+                <div class="upload-area" id="dropZone">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+                        <path d="M19 7v2.99s-1.99.01-2 0V7h-3s.01-1.99 0-2h3V2h2v3h3v2h-3zm-3 4V8h-3V5H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8h-3zM5 19l3-4 2 3 3-4 4 5H5z"/>
+                    </svg>
+                    <p>Drop image here, paste from clipboard, or click to upload</p>
+                    <input type="file" id="imageInput" accept="image/*" hidden>
+                </div>
+                <div id="imagePreview" class="image-preview hidden">
+                    <img id="previewImg" src="" alt="Preview">
+                    <button id="clearImage" class="btn secondary">Clear</button>
+                </div>
+                <button id="parseImageBtn" class="btn primary" disabled>Extract Recipe</button>
+            </section>
+
+            <!-- Text Paste -->
+            <section id="text-section" class="intake-section">
+                <textarea id="recipeText" placeholder="Paste recipe text here..."></textarea>
+                <button id="parseTextBtn" class="btn primary">Parse Recipe</button>
+            </section>
+
+            <!-- Recipe Preview/Edit -->
+            <section id="preview-section" class="hidden">
+                <div class="preview-header">
+                    <h2>Review Recipe</h2>
+                    <div class="confidence-badge" id="confidenceBadge">
+                        <span class="confidence-label">Confidence:</span>
+                        <span class="confidence-value"></span>
+                    </div>
+                </div>
+
+                <div id="reviewWarning" class="warning hidden">
+                    <strong>Fields that may need review:</strong>
+                    <span id="reviewFields"></span>
+                </div>
+
+                <form id="recipeForm">
+                    <div class="form-group">
+                        <label for="editTitle">Title *</label>
+                        <input type="text" id="editTitle" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editDescription">Description</label>
+                        <textarea id="editDescription" rows="2"></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editPrepTime">Prep Time (min)</label>
+                            <input type="number" id="editPrepTime" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="editCookTime">Cook Time (min)</label>
+                            <input type="number" id="editCookTime" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="editTotalTime">Total Time (min)</label>
+                            <input type="number" id="editTotalTime" min="0">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editServings">Servings/Yield</label>
+                        <input type="text" id="editServings" placeholder="e.g., 4 servings, 12 cookies">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Ingredients</label>
+                        <div id="ingredientsList" class="editable-list"></div>
+                        <button type="button" id="addIngredient" class="btn secondary small">+ Add Ingredient</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Instructions</label>
+                        <div id="instructionsList" class="editable-list"></div>
+                        <button type="button" id="addInstruction" class="btn secondary small">+ Add Step</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editTags">Tags (comma-separated)</label>
+                        <input type="text" id="editTags" placeholder="e.g., dessert, vegetarian, quick">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editSource">Source URL</label>
+                        <input type="url" id="editSource">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="editNotes">Notes</label>
+                        <textarea id="editNotes" rows="2"></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" id="cancelBtn" class="btn secondary">Cancel</button>
+                        <button type="submit" id="saveBtn" class="btn primary">Save to KitchenOwl</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Loading Overlay -->
+            <div id="loading" class="loading-overlay hidden">
+                <div class="spinner"></div>
+                <p id="loadingText">Processing...</p>
+            </div>
+        </main>
+
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal hidden">
+            <div class="modal-content settings-modal">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button id="closeSettings" class="icon-btn">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Settings Tabs -->
+                <div class="settings-tabs">
+                    <button class="settings-tab active" data-settings-tab="connection">Connection</button>
+                    <button class="settings-tab" data-settings-tab="apikeys">API Keys</button>
+                </div>
+
+                <div class="modal-body">
+                    <!-- Connection Tab -->
+                    <div id="settings-connection" class="settings-tab-content active">
+                        <div class="settings-section">
+                            <h3>KitchenOwl Connection</h3>
+                            <div id="koStatus" class="status-indicator">
+                                <span class="status-dot"></span>
+                                <span class="status-text">Checking...</span>
+                            </div>
+                            <p class="hint" id="koUrlHint"></p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settingsHousehold">Default Household</label>
+                            <select id="settingsHousehold">
+                                <option value="">Select household...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- API Keys Tab -->
+                    <div id="settings-apikeys" class="settings-tab-content hidden">
+                        <div class="settings-section">
+                            <h3>KitchenOwl Token</h3>
+                            <p class="hint">Long-lived API token from KitchenOwl for recipe creation</p>
+                            <div class="secret-input-group">
+                                <input type="password" id="secretKitchenowlToken" placeholder="Enter token...">
+                                <button type="button" class="icon-btn toggle-secret" data-target="secretKitchenowlToken" title="Show/hide">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="secret-status" id="statusKitchenowlToken">
+                                <span class="status-dot"></span>
+                                <span class="status-text">Checking...</span>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3>AI API Keys</h3>
+                            <p class="hint">API keys for AI-powered recipe parsing from images and text</p>
+
+                            <div class="form-group">
+                                <label for="secretAnthropicApiKey">Anthropic API Key</label>
+                                <div class="secret-input-group">
+                                    <input type="password" id="secretAnthropicApiKey" placeholder="sk-ant-...">
+                                    <button type="button" class="icon-btn toggle-secret" data-target="secretAnthropicApiKey" title="Show/hide">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                            <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="secret-status" id="statusAnthropicApiKey">
+                                    <span class="status-dot"></span>
+                                    <span class="status-text">Checking...</span>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="secretOpenaiApiKey">OpenAI API Key</label>
+                                <div class="secret-input-group">
+                                    <input type="password" id="secretOpenaiApiKey" placeholder="sk-...">
+                                    <button type="button" class="icon-btn toggle-secret" data-target="secretOpenaiApiKey" title="Show/hide">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                            <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="secret-status" id="statusOpenaiApiKey">
+                                    <span class="status-dot"></span>
+                                    <span class="status-text">Checking...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button id="saveSettings" class="btn primary">Save Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- First-Run Setup Wizard -->
+        <div id="setupWizard" class="modal hidden">
+            <div class="modal-content setup-wizard">
+                <div class="modal-header">
+                    <h2>Welcome to ko-pellet</h2>
+                </div>
+                <div class="modal-body">
+                    <p class="setup-intro">To get started, please configure your KitchenOwl token and optionally add AI API keys for enhanced recipe parsing.</p>
+
+                    <div class="settings-section">
+                        <h3>KitchenOwl Token <span class="required">*</span></h3>
+                        <p class="hint">Generate a long-lived API token in KitchenOwl settings</p>
+                        <div class="secret-input-group">
+                            <input type="password" id="setupKitchenowlToken" placeholder="Enter token...">
+                            <button type="button" class="icon-btn toggle-secret" data-target="setupKitchenowlToken" title="Show/hide">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>AI API Key (Optional)</h3>
+                        <p class="hint">Enables AI-powered parsing of images and text. Without an AI key, only URL imports will work well.</p>
+                        <div class="form-group">
+                            <label for="setupAnthropicApiKey">Anthropic API Key</label>
+                            <div class="secret-input-group">
+                                <input type="password" id="setupAnthropicApiKey" placeholder="sk-ant-... (optional)">
+                                <button type="button" class="icon-btn toggle-secret" data-target="setupAnthropicApiKey" title="Show/hide">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="skipSetup" class="btn secondary">Skip for now</button>
+                    <button id="completeSetup" class="btn primary">Save & Continue</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

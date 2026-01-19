@@ -1,0 +1,29 @@
+services:
+  ko-pellet:
+    build: .
+    container_name: ko-pellet
+    restart: unless-stopped
+    ports:
+      # Default: accessible on all interfaces (simple setup)
+      - "8998:8000"
+      # Restricted: bind to specific IP only (more secure)
+      # Use this when Traefik/proxy is on another host - only that network can reach it
+      # - "192.168.1.50:8998:8000"  # Replace with your host's IP
+      # Localhost only: use when Traefik is on the same host
+      # - "127.0.0.1:8998:8000"
+    environment:
+      - DATA_DIR=/data
+    env_file:
+      - .env
+    volumes:
+      - ko-pellet-data:/data
+      - ./certs:/certs:ro  # Optional: custom CA certificates
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  ko-pellet-data:
