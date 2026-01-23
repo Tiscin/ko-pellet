@@ -175,6 +175,65 @@ class KitchenOwlClient:
             response.raise_for_status()
             return response.json()
 
+    async def check_duplicate(self, household_id: int, title: str) -> List[Dict[str, Any]]:
+        """Check if a recipe with similar title already exists."""
+        # Search for recipes with the same title
+        results = await self.search_recipes(household_id, title)
+
+        # Filter for close matches (case-insensitive)
+        title_lower = title.lower().strip()
+        matches = []
+        for recipe in results:
+            recipe_name = recipe.get("name", "").lower().strip()
+            # Exact match or contained within
+            if recipe_name == title_lower or title_lower in recipe_name or recipe_name in title_lower:
+                matches.append(recipe)
+
+        return matches
+
+    async def upload_image(self, image_data: bytes, filename: str = "recipe.jpg") -> Optional[str]:
+        """
+        Upload an image to KitchenOwl and return the filename for use in recipes.
+
+        Args:
+            image_data: Raw image bytes
+            filename: Original filename (used for extension detection)
+
+        Returns:
+            The filename to use in the recipe's photo field, or None if upload failed
+        """
+        # Determine content type from filename
+        ext = filename.lower().split(".")[-1] if "." in filename else "jpg"
+        content_type_map = {
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "gif": "image/gif",
+            "webp": "image/webp",
+        }
+        content_type = content_type_map.get(ext, "image/jpeg")
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Prepare multipart form data
+            files = {
+                "file": (filename, image_data, content_type)
+            }
+
+            # Remove Content-Type from headers (httpx sets it for multipart)
+            headers = {"Authorization": f"Bearer {self.access_token}"} if self.access_token else {}
+
+            response = await client.post(
+                f"{self.base_url}/api/upload",
+                headers=headers,
+                files=files
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("name") or data.get("filename")
+            else:
+                return None
+
 
 def get_client_for_request(request: Request) -> KitchenOwlClient:
     """Get a KitchenOwl client using the token from encrypted secrets store."""

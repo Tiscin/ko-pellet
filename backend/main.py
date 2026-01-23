@@ -25,7 +25,7 @@ from slowapi.errors import RateLimitExceeded
 from typing import Optional
 from pydantic import BaseModel
 
-from models import Recipe, ParseRequest, KitchenOwlStatus
+from models import Recipe, ParseRequest, KitchenOwlStatus, RecipeCreateRequest
 from config import settings, is_https_app, get_trusted_proxy_ips
 from kitchenowl import get_client_for_request
 from parsers.url_parser import parse_url
@@ -472,16 +472,56 @@ async def kitchenowl_households(request: Request, auth: dict = Depends(require_a
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/kitchenowl/recipe/{household_id}")
-async def create_kitchenowl_recipe(
+@app.get("/api/kitchenowl/check-duplicate/{household_id}")
+async def check_duplicate_recipe(
     household_id: int,
-    recipe: Recipe,
+    title: str,
     request: Request,
     auth: dict = Depends(require_auth)
 ):
-    """Create a recipe in KitchenOwl."""
+    """Check if a recipe with similar title already exists."""
     client = get_client_for_request(request)
     try:
+        matches = await client.check_duplicate(household_id, title)
+        return {
+            "has_duplicate": len(matches) > 0,
+            "matches": matches
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/kitchenowl/recipe/{household_id}")
+async def create_kitchenowl_recipe(
+    household_id: int,
+    request_data: RecipeCreateRequest,
+    request: Request,
+    auth: dict = Depends(require_auth)
+):
+    """Create a recipe in KitchenOwl, optionally with an uploaded image."""
+    import base64
+
+    client = get_client_for_request(request)
+    recipe = request_data.recipe
+
+    try:
+        # If image data is provided, upload it first
+        if request_data.image_data:
+            try:
+                # Decode base64 image data
+                image_bytes = base64.b64decode(request_data.image_data)
+                filename = request_data.image_filename or "recipe.jpg"
+
+                # Upload to KitchenOwl
+                uploaded_filename = await client.upload_image(image_bytes, filename)
+                if uploaded_filename:
+                    # Set the photo field to the uploaded filename
+                    recipe.image_url = uploaded_filename
+                    logging.info(f"Uploaded recipe image: {uploaded_filename}")
+            except Exception as e:
+                logging.warning(f"Failed to upload recipe image: {e}")
+                # Continue without image - don't fail the whole request
+
         result = await client.create_recipe(household_id, recipe)
 
         # Record stats for successful save

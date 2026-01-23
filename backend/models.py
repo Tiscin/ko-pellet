@@ -46,3 +46,10 @@ class KitchenOwlStatus(BaseModel):
     connected: bool
     url: str
     error: Optional[str] = None
+
+
+class RecipeCreateRequest(BaseModel):
+    """Request model for creating a recipe, with optional image data."""
+    recipe: Recipe
+    image_data: Optional[str] = None  # Base64-encoded image data
+    image_filename: Optional[str] = None  # Original filename for extension detection
