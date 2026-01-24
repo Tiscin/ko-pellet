@@ -48,3 +48,6 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# AI assistant files
+CLAUDE.md

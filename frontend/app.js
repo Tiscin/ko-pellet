@@ -3,8 +3,6 @@
 // State
 let currentRecipe = null;
 let selectedImage = null;
-let selectedImageBase64 = null;  // Store base64 for sending to KitchenOwl
-let selectedImageFilename = null;  // Store filename for extension detection
 let households = [];
 let selectedHouseholdId = null;
 let isAuthenticated = false;
@@ -368,24 +366,18 @@ function initImageUpload() {
 function handleImageFile(file) {
     if (!file.type.startsWith('image/')) { showToast('Please select an image file', 'error'); return; }
     selectedImage = file;
-    selectedImageFilename = file.name || 'recipe.jpg';
     const reader = new FileReader();
     reader.onload = (e) => {
         elements.previewImg.src = e.target.result;
         elements.imagePreview.classList.remove('hidden');
         elements.dropZone.classList.add('hidden');
         elements.parseImageBtn.disabled = false;
-        // Store base64 data (strip the data URL prefix)
-        const base64 = e.target.result.split(',')[1];
-        selectedImageBase64 = base64;
     };
     reader.readAsDataURL(file);
 }
 
 function clearImagePreview() {
     selectedImage = null;
-    selectedImageBase64 = null;
-    selectedImageFilename = null;
     elements.previewImg.src = '';
     elements.imagePreview.classList.add('hidden');
     elements.dropZone.classList.remove('hidden');
@@ -540,12 +532,6 @@ function initRecipeForm() {
 
             // Build request payload
             const payload = { recipe };
-
-            // If source was image, include the image data
-            if (currentSourceType === 'image' && selectedImageBase64) {
-                payload.image_data = selectedImageBase64;
-                payload.image_filename = selectedImageFilename;
-            }
 
             await apiRequest(`/kitchenowl/recipe/${selectedHouseholdId}`, { method: 'POST', body: JSON.stringify(payload) });
             showToast('Recipe saved to KitchenOwl!', 'success');

@@ -49,7 +49,5 @@ class KitchenOwlStatus(BaseModel):
 
 
 class RecipeCreateRequest(BaseModel):
-    """Request model for creating a recipe, with optional image data."""
+    """Request model for creating a recipe."""
     recipe: Recipe
-    image_data: Optional[str] = None  # Base64-encoded image data
-    image_filename: Optional[str] = None  # Original filename for extension detection

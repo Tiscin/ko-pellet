@@ -498,35 +498,11 @@ async def create_kitchenowl_recipe(
     request: Request,
     auth: dict = Depends(require_auth)
 ):
-    """Create a recipe in KitchenOwl, optionally with an uploaded image."""
-    import base64
-
+    """Create a recipe in KitchenOwl."""
     client = get_client_for_request(request)
     recipe = request_data.recipe
 
     try:
-        # If image data is provided, upload it first
-        if request_data.image_data:
-            logging.info(f"Image data provided: {len(request_data.image_data)} chars, filename: {request_data.image_filename}")
-            try:
-                # Decode base64 image data
-                image_bytes = base64.b64decode(request_data.image_data)
-                logging.info(f"Decoded image: {len(image_bytes)} bytes")
-                filename = request_data.image_filename or "recipe.jpg"
-
-                # Upload to KitchenOwl
-                uploaded_filename = await client.upload_image(image_bytes, filename)
-                if uploaded_filename:
-                    # Set the photo field to the uploaded filename
-                    recipe.image_url = uploaded_filename
-                    logging.info(f"Uploaded recipe image: {uploaded_filename}")
-                else:
-                    logging.warning("Image upload returned None")
-            except Exception as e:
-                logging.warning(f"Failed to upload recipe image: {e}", exc_info=True)
-        else:
-            logging.info("No image data provided in request")
-
         result = await client.create_recipe(household_id, recipe)
 
         # Record stats for successful save
