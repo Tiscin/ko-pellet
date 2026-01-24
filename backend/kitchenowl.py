@@ -1,4 +1,5 @@
 import httpx
+import logging
 from starlette.requests import Request
 from typing import Optional, Dict, Any, List
 from models import Recipe, KitchenOwlStatus
@@ -115,13 +116,15 @@ class KitchenOwlClient:
         # Format time (KitchenOwl expects minutes as integer)
         time_value = recipe.total_time or recipe.cook_time or recipe.prep_time
 
-        # Build description with instructions
+        # Build description with instructions using markdown
         desc_parts = []
         if recipe.description:
             desc_parts.append(recipe.description)
         if recipe.instructions:
-            steps = [f"{i}. {step}" for i, step in enumerate(recipe.instructions, 1)]
-            desc_parts.append("Instructions:\n" + "\n".join(steps))
+            steps = [f"1. {step}" for step in recipe.instructions]  # Markdown auto-numbers
+            desc_parts.append("## Instructions\n\n" + "\n".join(steps))
+        if recipe.notes:
+            desc_parts.append(f"## Notes\n\n{recipe.notes}")
         full_description = "\n\n".join(desc_parts) if desc_parts else ""
 
         payload = {
@@ -228,10 +231,13 @@ class KitchenOwlClient:
                 files=files
             )
 
+            logging.info(f"Image upload response: {response.status_code}")
             if response.status_code == 200:
                 data = response.json()
+                logging.info(f"Image upload response data: {data}")
                 return data.get("name") or data.get("filename")
             else:
+                logging.warning(f"Image upload failed: {response.status_code} - {response.text}")
                 return None
 
 
