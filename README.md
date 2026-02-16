@@ -10,8 +10,8 @@ Recipe import tool for [KitchenOwl](https://kitchenowl.org/). Snap a photo, past
   - Text paste with AI parsing
 
 - **Security-First Design**
-  - OIDC authentication (Keycloak, Authentik, Authelia)
-  - Forward-auth support for reverse proxy setups
+  - Three auth modes: OIDC, forward-auth, or KitchenOwl native login
+  - KitchenOwl native auth requires no SSO infrastructure — just your KO credentials
   - Encrypted secret storage (API keys stored with AES-256-GCM)
   - No secrets in environment variables after initial setup
 
@@ -41,15 +41,21 @@ Edit `.env` with your settings:
 ```env
 # Required
 KITCHENOWL_URL=https://kitchenowl.example.com
-
-# OIDC Authentication (option 1)
-OIDC_ISSUER=https://keycloak.example.com/realms/myrealm
-OIDC_CLIENT_ID=ko-pellet
-OIDC_CLIENT_SECRET=your-client-secret
-
-# App URL (for OIDC redirect)
-# Default port is 8998
 APP_URL=https://recipes.example.com
+
+# Authentication — pick ONE (or none for KitchenOwl native login):
+
+# Option 1: OIDC (Keycloak, Authentik, etc.)
+#OIDC_ISSUER=https://keycloak.example.com/realms/myrealm
+#OIDC_CLIENT_ID=ko-pellet
+#OIDC_CLIENT_SECRET=your-client-secret
+
+# Option 2: Forward-auth (reverse proxy)
+#FORWARD_AUTH_ENABLED=true
+#TRUSTED_PROXY_IPS=172.18.0.0/16
+
+# Option 3: KitchenOwl native — no config needed!
+# Just leave OIDC and forward-auth unconfigured.
 ```
 
 ### 2. Run with Docker Compose
@@ -60,11 +66,18 @@ docker compose up -d
 
 ### 3. First-Time Setup
 
+**With OIDC or forward-auth:**
 1. Navigate to your ko-pellet URL
-2. Log in via OIDC
+2. Log in via your SSO provider
 3. Complete the setup wizard:
-   - Enter your KitchenOwl long-lived API token (from KitchenOwl → Profile → Sessions → click "+" in Long-lived tokens)
+   - Enter your KitchenOwl long-lived API token (from KitchenOwl → Profile → Sessions → Long-lived tokens)
    - Optionally add an Anthropic API key for AI parsing
+4. Select your default household in Settings
+
+**With KitchenOwl native auth (no SSO):**
+1. Navigate to your ko-pellet URL
+2. Log in with your KitchenOwl username and password
+3. Optionally add an Anthropic API key in the setup wizard (no KO token needed — your session handles it)
 4. Select your default household in Settings
 
 ## Configuration
@@ -85,13 +98,13 @@ docker compose up -d
 | `ALLOWED_INTERNAL_HOSTS` | No | Comma-separated hostnames/IPs allowed for recipe URL imports (e.g., `recipes.local,ko.lan`) |
 | `DEBUG` | No | Enable debug mode |
 
-*Required unless using forward-auth mode
+*Required only when using OIDC mode (not needed for forward-auth or KitchenOwl native auth)
 
 ### Secrets (Configured via Web UI)
 
 After logging in, configure these in Settings → API Keys:
 
-- **KitchenOwl Token**: Long-lived API token (found in KitchenOwl → Profile → Sessions → Long-lived tokens)
+- **KitchenOwl Token**: Long-lived API token (found in KitchenOwl → Profile → Sessions → Long-lived tokens). *Not needed with KitchenOwl native auth — your session token is used automatically.*
 - **Anthropic API Key**: For AI-powered image/text parsing
 - **OpenAI API Key**: Alternative AI provider
 
@@ -111,7 +124,13 @@ On startup, ko-pellet automatically builds a combined CA bundle from all `.crt` 
 
 ## Authentication Methods
 
-### OIDC (Recommended)
+ko-pellet supports three auth modes, auto-detected by priority:
+
+1. **Forward-auth** — if `FORWARD_AUTH_ENABLED=true`
+2. **OIDC** — if `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET` are set
+3. **KitchenOwl native** — automatic fallback when neither above is configured
+
+### OIDC (Recommended for SSO environments)
 
 Configure your OIDC provider (Keycloak, Authentik, etc.) with:
 
@@ -129,6 +148,15 @@ FORWARD_AUTH_HEADER_USER=Remote-User
 
 ko-pellet reads the authenticated user from proxy headers.
 
+### KitchenOwl Native Auth
+
+If you don't have an SSO provider or forward-auth proxy, ko-pellet falls back to authenticating directly against your KitchenOwl instance. No additional configuration needed — just leave OIDC and forward-auth settings unconfigured.
+
+- Login form appears automatically at your ko-pellet URL
+- Uses your existing KitchenOwl username and password
+- Session tokens refresh transparently (access tokens every 15 min, refresh tokens last 30 days)
+- No need to create a separate long-lived API token — your session handles KO API access
+
 ## API Endpoints
 
 | Method | Endpoint | Auth | Description |
@@ -137,6 +165,7 @@ ko-pellet reads the authenticated user from proxy headers.
 | GET | `/api/auth/status` | No | Authentication status |
 | GET | `/api/auth/login` | No | Initiate OIDC login |
 | GET | `/api/auth/callback` | No | OIDC callback |
+| POST | `/api/auth/kitchenowl` | No | KitchenOwl native login |
 | POST | `/api/auth/logout` | Yes | Logout |
 | GET | `/api/secrets/status` | Yes | Check configured secrets |
 | POST | `/api/secrets/{key}` | Yes | Set a secret |
@@ -170,7 +199,7 @@ uvicorn main:app --reload
 ko-pellet/
 ├── backend/
 │   ├── main.py           # FastAPI application
-│   ├── auth.py           # OIDC authentication
+│   ├── auth.py           # Authentication (OIDC, forward-auth, KO native)
 │   ├── forward_auth.py   # Forward-auth support
 │   ├── config.py         # Settings management
 │   ├── crypto.py         # AES-256-GCM encryption
@@ -199,7 +228,7 @@ ko-pellet/
 - **Secrets**: API keys are encrypted at rest using AES-256-GCM with a device key stored in `/data/.device_key`
 - **Sessions**: File-based sessions in `/data/sessions/` with 0600 permissions
 - **Cookies**: `Secure` and `HttpOnly` flags set automatically when `APP_URL` uses HTTPS
-- **CSRF Protection**: Origin header verified on state-changing endpoints (secrets mutations)
+- **CSRF Protection**: Origin header verified on state-changing endpoints (login, logout, secrets mutations)
 - **OIDC**: State parameter validated to prevent CSRF
 - **Container**: Runs as non-root user (uid 1000)
 - **Data Directory**: Permissions set to 700

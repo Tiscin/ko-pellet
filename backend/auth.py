@@ -44,9 +44,18 @@ def is_oidc_configured() -> bool:
     return _oidc_configured
 
 
+def is_kitchenowl_auth_available() -> bool:
+    """Check if KitchenOwl native auth should be available.
+
+    KO auth activates automatically when neither OIDC nor forward-auth
+    is configured and KITCHENOWL_URL is set (always required).
+    """
+    return not is_oidc_configured() and not is_forward_auth_enabled()
+
+
 def is_any_auth_configured() -> bool:
     """Check if any authentication method is configured."""
-    return is_oidc_configured() or is_forward_auth_enabled()
+    return is_oidc_configured() or is_forward_auth_enabled() or is_kitchenowl_auth_available()
 
 
 def get_auth_method() -> Optional[str]:
@@ -55,6 +64,8 @@ def get_auth_method() -> Optional[str]:
         return "forward_auth"
     if is_oidc_configured():
         return "oidc"
+    if is_kitchenowl_auth_available():
+        return "kitchenowl"
     return None
 
 

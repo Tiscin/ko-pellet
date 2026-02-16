@@ -35,6 +35,7 @@ from auth import (
     configure_oidc,
     is_oidc_configured,
     is_any_auth_configured,
+    is_kitchenowl_auth_available,
     get_auth_method,
     get_login_redirect,
     handle_callback,
@@ -104,6 +105,11 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Cookie name for our file-based auth session
 AUTH_COOKIE_NAME = "ko_pellet_auth"
 
+# Request models
+class KitchenOwlLoginRequest(BaseModel):
+    username: str
+    password: str
+
 # Add session middleware for OIDC state (small data, cookie is fine)
 # https_only derived from APP_URL scheme
 app.add_middleware(
@@ -140,9 +146,8 @@ async def startup():
     elif configure_oidc():
         logging.info("OIDC configured successfully")
     else:
-        logging.warning("No authentication method configured")
-        logging.warning("  Set OIDC_ISSUER, OIDC_CLIENT_ID, and OIDC_CLIENT_SECRET for OIDC")
-        logging.warning("  Or set FORWARD_AUTH_ENABLED=true for forward-auth mode")
+        logging.info("KitchenOwl native authentication enabled (no OIDC or forward-auth configured)")
+        logging.info("  Users will log in with their KitchenOwl username and password")
 
 
 def get_auth_from_request(request: Request) -> Optional[dict]:
@@ -196,6 +201,7 @@ async def auth_status(request: Request):
             "auth_method": auth_method,
             "oidc_configured": is_oidc_configured(),
             "forward_auth_enabled": is_forward_auth_enabled(),
+            "kitchenowl_auth_available": is_kitchenowl_auth_available(),
         }
     return {
         "authenticated": False,
@@ -203,6 +209,7 @@ async def auth_status(request: Request):
         "auth_method": None,
         "oidc_configured": is_oidc_configured(),
         "forward_auth_enabled": is_forward_auth_enabled(),
+        "kitchenowl_auth_available": is_kitchenowl_auth_available(),
     }
 
 
@@ -211,14 +218,59 @@ async def auth_status(request: Request):
 async def login(request: Request):
     """Redirect to OIDC provider for login."""
     if is_forward_auth_enabled():
-        # Forward-auth handles login externally
         raise HTTPException(
             status_code=400,
             detail="Login is handled by your reverse proxy. Please access this app through your proxy."
         )
+    if is_kitchenowl_auth_available():
+        raise HTTPException(
+            status_code=400,
+            detail="Use POST /api/auth/kitchenowl with username and password"
+        )
     if not is_oidc_configured():
         raise HTTPException(status_code=400, detail="OIDC not configured")
     return await get_login_redirect(request)
+
+
+@app.post("/api/auth/kitchenowl")
+@limiter.limit("5/minute")
+async def kitchenowl_auth(request: Request, login_data: KitchenOwlLoginRequest):
+    """Authenticate with KitchenOwl username and password."""
+    verify_origin(request)
+
+    if not is_kitchenowl_auth_available():
+        raise HTTPException(status_code=400, detail="KitchenOwl native auth is not available")
+
+    from kitchenowl import kitchenowl_login
+    try:
+        auth_data = await kitchenowl_login(
+            settings.kitchenowl_url,
+            login_data.username,
+            login_data.password,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except RuntimeError:
+        raise HTTPException(status_code=502, detail="Authentication service error")
+
+    # Create file-based session
+    session_id = create_session()
+    set_session(session_id, auth_data)
+
+    from fastapi.responses import JSONResponse
+    response = JSONResponse(content={
+        "success": True,
+        "user": auth_data.get("user"),
+    })
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=session_id,
+        max_age=86400 * 7,  # 7 days
+        httponly=True,
+        samesite="lax",
+        secure=is_https_app(),
+    )
+    return response
 
 
 @app.get("/api/auth/callback")
@@ -255,6 +307,7 @@ async def auth_callback(request: Request):
 @app.post("/api/auth/logout")
 async def logout(request: Request, response: Response):
     """Log out and clear session."""
+    verify_origin(request)
     auth = get_auth_from_request(request)
     if auth and auth.get("auth_method") == "forward_auth":
         # For forward-auth, we can't really log out - the proxy controls that
@@ -458,14 +511,15 @@ async def parse_recipe_image(request: Request, file: UploadFile = File(...), aut
 @app.get("/api/kitchenowl/status")
 async def kitchenowl_status(request: Request):
     """Check KitchenOwl connection status."""
-    client = get_client_for_request(request)
+    auth = get_auth_from_request(request)
+    client = await get_client_for_request(request, auth)
     return await client.check_connection()
 
 
 @app.get("/api/kitchenowl/households")
 async def kitchenowl_households(request: Request, auth: dict = Depends(require_auth)):
     """Get available households."""
-    client = get_client_for_request(request)
+    client = await get_client_for_request(request, auth)
     try:
         return await client.get_households()
     except Exception as e:
@@ -480,7 +534,7 @@ async def check_duplicate_recipe(
     auth: dict = Depends(require_auth)
 ):
     """Check if a recipe with similar title already exists."""
-    client = get_client_for_request(request)
+    client = await get_client_for_request(request, auth)
     try:
         matches = await client.check_duplicate(household_id, title)
         return {
@@ -499,7 +553,7 @@ async def create_kitchenowl_recipe(
     auth: dict = Depends(require_auth)
 ):
     """Create a recipe in KitchenOwl."""
-    client = get_client_for_request(request)
+    client = await get_client_for_request(request, auth)
     recipe = request_data.recipe
 
     try:
@@ -527,7 +581,7 @@ async def get_kitchenowl_recipes(
     auth: dict = Depends(require_auth)
 ):
     """Get recipes from a household."""
-    client = get_client_for_request(request)
+    client = await get_client_for_request(request, auth)
     try:
         return await client.get_recipes(household_id)
     except Exception as e:
@@ -542,6 +596,7 @@ async def get_settings():
         "kitchenowl_url": settings.kitchenowl_url,
         "oidc_configured": is_oidc_configured(),
         "forward_auth_enabled": is_forward_auth_enabled(),
+        "kitchenowl_auth_available": is_kitchenowl_auth_available(),
         "auth_method": get_auth_method(),
     }
 

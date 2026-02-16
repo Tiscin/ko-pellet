@@ -35,6 +35,19 @@
             <button id="loginBannerBtn" class="btn primary">Login</button>
         </div>
 
+        <!-- KitchenOwl Native Login Form -->
+        <div id="koLoginForm" class="ko-login-form hidden">
+            <p>Log in with your KitchenOwl account</p>
+            <form id="koLoginFormElement" autocomplete="on">
+                <div class="ko-login-fields">
+                    <input type="text" id="koUsername" placeholder="Username" autocomplete="username" required>
+                    <input type="password" id="koPassword" placeholder="Password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" id="koLoginBtn" class="btn primary">Login</button>
+                <p id="koLoginError" class="ko-login-error hidden"></p>
+            </form>
+        </div>
+
         <main id="mainContent" class="hidden">
             <!-- Stats Dashboard -->
             <section id="statsSection" class="stats-section">
@@ -363,9 +376,9 @@
                     <h2>Welcome to ko-pellet</h2>
                 </div>
                 <div class="modal-body">
-                    <p class="setup-intro">To get started, please configure your KitchenOwl token and optionally add AI API keys for enhanced recipe parsing.</p>
+                    <p class="setup-intro" id="setupIntro">To get started, please configure your KitchenOwl token and optionally add AI API keys for enhanced recipe parsing.</p>
 
-                    <div class="settings-section">
+                    <div class="settings-section" id="setupTokenSection">
                         <h3>KitchenOwl Token <span class="required">*</span></h3>
                         <p class="hint">Generate a long-lived API token in KitchenOwl settings</p>
                         <div class="secret-input-group">

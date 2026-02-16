@@ -79,6 +79,16 @@ const elements = {
     completeSetup: document.getElementById('completeSetup'),
     themeToggle: document.getElementById('themeToggle'),
     toast: document.getElementById('toast'),
+    // KitchenOwl login form
+    koLoginForm: document.getElementById('koLoginForm'),
+    koLoginFormElement: document.getElementById('koLoginFormElement'),
+    koUsername: document.getElementById('koUsername'),
+    koPassword: document.getElementById('koPassword'),
+    koLoginBtn: document.getElementById('koLoginBtn'),
+    koLoginError: document.getElementById('koLoginError'),
+    // Setup wizard extras
+    setupIntro: document.getElementById('setupIntro'),
+    setupTokenSection: document.getElementById('setupTokenSection'),
     // Stats elements
     statsSection: document.getElementById('statsSection'),
     statsGrid: document.getElementById('statsGrid'),
@@ -127,6 +137,13 @@ async function apiRequest(endpoint, options = {}) {
         ...options,
     });
     if (!response.ok) {
+        if (response.status === 401) {
+            // Session expired or revoked — refresh auth UI
+            const status = await checkAuthStatus();
+            if (!status.authenticated) {
+                showToast('Session expired, please log in again', 'error');
+            }
+        }
         const error = await response.json().catch(() => ({ detail: 'Request failed' }));
         throw new Error(error.detail || 'Request failed');
     }
@@ -141,7 +158,7 @@ async function checkAuthStatus() {
         updateAuthUI(status);
         return status;
     } catch (error) {
-        updateAuthUI({ authenticated: false, oidc_configured: false, forward_auth_enabled: false });
+        updateAuthUI({ authenticated: false, oidc_configured: false, forward_auth_enabled: false, kitchenowl_auth_available: false });
         return { authenticated: false };
     }
 }
@@ -150,6 +167,7 @@ function updateAuthUI(status) {
     if (status.authenticated) {
         elements.loginBtn.classList.add('hidden');
         elements.loginBanner.classList.add('hidden');
+        elements.koLoginForm.classList.add('hidden');
         elements.userInfo.classList.remove('hidden');
         elements.userName.textContent = status.user?.name || status.user?.email || 'User';
         elements.mainContent.classList.remove('hidden');
@@ -161,7 +179,13 @@ function updateAuthUI(status) {
     } else {
         elements.userInfo.classList.add('hidden');
         elements.mainContent.classList.add('hidden');
-        if (status.oidc_configured) {
+        elements.koLoginForm.classList.add('hidden');
+        if (status.kitchenowl_auth_available) {
+            // KitchenOwl native auth — show username/password form
+            elements.loginBtn.classList.add('hidden');
+            elements.loginBanner.classList.add('hidden');
+            elements.koLoginForm.classList.remove('hidden');
+        } else if (status.oidc_configured) {
             elements.loginBtn.classList.remove('hidden');
             elements.loginBanner.classList.remove('hidden');
         } else if (status.forward_auth_enabled) {
@@ -189,6 +213,45 @@ function initAuth() {
             await checkAuthStatus();
         } catch (error) {
             showToast('Logout failed', 'error');
+        }
+    });
+}
+
+function initKitchenOwlLogin() {
+    elements.koLoginFormElement.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = elements.koUsername.value.trim();
+        const password = elements.koPassword.value;
+        if (!username || !password) return;
+
+        elements.koLoginBtn.disabled = true;
+        elements.koLoginBtn.textContent = 'Logging in...';
+        elements.koLoginError.classList.add('hidden');
+
+        try {
+            const response = await fetch('/api/auth/kitchenowl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.detail || 'Login failed');
+            }
+            elements.koPassword.value = '';
+            showToast('Logged in successfully', 'success');
+            const authStatus = await checkAuthStatus();
+            if (authStatus.authenticated) {
+                await loadStats();
+                const skipped = localStorage.getItem('setupSkipped');
+                if (!skipped) await checkFirstRun();
+            }
+        } catch (error) {
+            elements.koLoginError.textContent = error.message;
+            elements.koLoginError.classList.remove('hidden');
+        } finally {
+            elements.koLoginBtn.disabled = false;
+            elements.koLoginBtn.textContent = 'Login';
         }
     });
 }
@@ -240,9 +303,23 @@ function initSecrets() {
 
 async function checkFirstRun() {
     if (!isAuthenticated) return;
+    const status = await apiRequest('/auth/status').catch(() => ({}));
     await loadSecretsStatus();
-    if (!secretsStatus.kitchenowl_token?.configured) {
-        elements.setupWizard.classList.remove('hidden');
+
+    if (status.auth_method === 'kitchenowl') {
+        // KO auth users don't need a separate KO token — their session token is used.
+        // Only show wizard if AI keys aren't configured (optional).
+        const hasAiKey = secretsStatus.anthropic_api_key?.configured || secretsStatus.openai_api_key?.configured;
+        if (!hasAiKey) {
+            // Show wizard but hide the KO token section
+            elements.setupTokenSection.classList.add('hidden');
+            elements.setupIntro.textContent = 'Optionally add an AI API key for enhanced recipe parsing from images and text.';
+            elements.setupWizard.classList.remove('hidden');
+        }
+    } else {
+        if (!secretsStatus.kitchenowl_token?.configured) {
+            elements.setupWizard.classList.remove('hidden');
+        }
     }
 }
 
@@ -254,10 +331,11 @@ function initSetupWizard() {
     elements.completeSetup?.addEventListener('click', async () => {
         const token = elements.setupKitchenowlToken?.value?.trim();
         const anthropicKey = elements.setupAnthropicApiKey?.value?.trim();
-        if (!token) { showToast('Please enter your KitchenOwl token', 'error'); return; }
+        const tokenRequired = !elements.setupTokenSection.classList.contains('hidden');
+        if (tokenRequired && !token) { showToast('Please enter your KitchenOwl token', 'error'); return; }
         try {
             showLoading('Saving configuration...');
-            await saveSecret('kitchenowl_token', token);
+            if (token) await saveSecret('kitchenowl_token', token);
             if (anthropicKey) await saveSecret('anthropic_api_key', anthropicKey);
             elements.setupWizard.classList.add('hidden');
             showToast('Configuration saved successfully', 'success');
@@ -590,6 +668,11 @@ async function loadSettings() {
         elements.koUrlHint.textContent = `Connected to: ${settings.kitchenowl_url}`;
         const savedHousehold = localStorage.getItem('selectedHouseholdId');
         if (savedHousehold) selectedHouseholdId = parseInt(savedHousehold);
+        // Hide KO token section in settings when using KO native auth
+        const koTokenSection = document.querySelector('#settings-apikeys .settings-section:first-child');
+        if (settings.auth_method === 'kitchenowl' && koTokenSection) {
+            koTokenSection.innerHTML = '<h3>KitchenOwl Token</h3><p class="hint">Managed automatically via your login session.</p>';
+        }
         await loadSecretsStatus();
         await checkKitchenOwlStatus();
     } catch (error) {}
@@ -737,6 +820,7 @@ function initStats() {
 document.addEventListener('DOMContentLoaded', async () => {
     initTabs();
     initAuth();
+    initKitchenOwlLogin();
     initSecrets();
     initSetupWizard();
     initUrlImport();

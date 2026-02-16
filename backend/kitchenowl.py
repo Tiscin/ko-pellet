@@ -1,10 +1,18 @@
+import asyncio
 import httpx
 import logging
+import time
 from starlette.requests import Request
 from typing import Optional, Dict, Any, List
 from models import Recipe, KitchenOwlStatus
 from config import settings
 from secrets_store import get_secret
+
+# Per-session locks to prevent concurrent refresh token races.
+# Key: session_id, Value: asyncio.Lock
+# Bounded to prevent memory leak from abandoned sessions.
+_refresh_locks: Dict[str, asyncio.Lock] = {}
+_MAX_REFRESH_LOCKS = 1000
 
 
 class KitchenOwlClient:
@@ -195,8 +203,137 @@ class KitchenOwlClient:
         return matches
 
 
-def get_client_for_request(request: Request) -> KitchenOwlClient:
-    """Get a KitchenOwl client using the token from encrypted secrets store."""
-    # Use the long-lived token from encrypted secrets store
+async def kitchenowl_login(base_url: str, username: str, password: str) -> Dict[str, Any]:
+    """Authenticate against KitchenOwl's native API.
+
+    Returns session-compatible dict with access_token, refresh_token, user info.
+    Raises ValueError on auth failure, RuntimeError on connection errors.
+    """
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            response = await client.post(
+                f"{base_url.rstrip('/')}/api/auth",
+                json={"username": username, "password": password, "device": "ko-pellet"},
+            )
+        except httpx.ConnectError:
+            raise RuntimeError("Could not connect to KitchenOwl server")
+
+        if response.status_code == 401:
+            raise ValueError("Invalid username or password")
+        if response.status_code != 200:
+            logging.warning(f"KitchenOwl auth returned unexpected status {response.status_code}")
+            raise RuntimeError("Authentication service error")
+
+        data = response.json()
+        access_token = data.get("access_token")
+        refresh_token = data.get("refresh_token")
+        user_data = data.get("user", {})
+
+        if not access_token:
+            raise RuntimeError("KitchenOwl did not return an access token")
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_expires_at": time.time() + (14 * 60),  # 14 min (KO tokens last 15 min)
+            "user": {
+                "sub": str(user_data.get("id", "")),
+                "name": user_data.get("name") or user_data.get("username", ""),
+                "email": user_data.get("email", ""),
+            },
+            "auth_method": "kitchenowl",
+        }
+
+
+async def kitchenowl_refresh(base_url: str, refresh_token: str) -> Optional[Dict[str, Any]]:
+    """Refresh KitchenOwl tokens using the refresh token.
+
+    Returns dict with new access_token, refresh_token, and token_expires_at.
+    Returns None on failure (expired refresh token, revoked session, etc).
+    """
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            response = await client.get(
+                f"{base_url.rstrip('/')}/api/auth/refresh",
+                headers={"Authorization": f"Bearer {refresh_token}"},
+            )
+        except Exception as e:
+            logging.warning(f"KitchenOwl token refresh failed: {e}")
+            return None
+
+        if response.status_code != 200:
+            logging.info(f"KitchenOwl token refresh returned {response.status_code}")
+            return None
+
+        data = response.json()
+        new_access = data.get("access_token")
+        new_refresh = data.get("refresh_token")
+
+        if not new_access:
+            return None
+
+        return {
+            "access_token": new_access,
+            "refresh_token": new_refresh or refresh_token,
+            "token_expires_at": time.time() + (14 * 60),
+        }
+
+
+def _get_refresh_lock(session_id: str) -> asyncio.Lock:
+    """Get or create a per-session lock for token refresh serialization."""
+    if session_id not in _refresh_locks:
+        # Evict oldest entries if we've hit the cap
+        if len(_refresh_locks) >= _MAX_REFRESH_LOCKS:
+            oldest = next(iter(_refresh_locks))
+            del _refresh_locks[oldest]
+        _refresh_locks[session_id] = asyncio.Lock()
+    return _refresh_locks[session_id]
+
+
+async def get_client_for_request(request: Request, auth: Optional[Dict[str, Any]] = None) -> KitchenOwlClient:
+    """Get a KitchenOwl client, handling token refresh for KO auth sessions.
+
+    For kitchenowl auth: uses session tokens with proactive refresh.
+    For OIDC/forward-auth: uses long-lived token from encrypted secrets store.
+    """
+    from session_store import get_session, set_session
+
+    if auth and auth.get("auth_method") == "kitchenowl":
+        token = auth.get("access_token")
+        expires_at = auth.get("token_expires_at", 0)
+
+        # Proactive refresh: if token expires within 60 seconds
+        if time.time() > (expires_at - 60):
+            session_id = request.cookies.get("ko_pellet_auth")
+            if not session_id:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=401, detail="Session expired, please log in again")
+
+            # Serialize refresh attempts per session to prevent token rotation races
+            lock = _get_refresh_lock(session_id)
+            async with lock:
+                # Re-read session — another request may have already refreshed
+                fresh_session = get_session(session_id)
+                if fresh_session and fresh_session.get("token_expires_at", 0) > (time.time() + 60):
+                    # Another request already refreshed, use updated token
+                    return KitchenOwlClient(access_token=fresh_session["access_token"])
+
+                # Still expired — do the refresh
+                refresh_token = (fresh_session or auth).get("refresh_token")
+                if refresh_token:
+                    new_tokens = await kitchenowl_refresh(settings.kitchenowl_url, refresh_token)
+                    if new_tokens:
+                        updated_auth = dict(fresh_session or auth)
+                        updated_auth.update(new_tokens)
+                        set_session(session_id, updated_auth)
+                        return KitchenOwlClient(access_token=new_tokens["access_token"])
+
+                # Refresh failed — token family is dead
+                from fastapi import HTTPException
+                raise HTTPException(status_code=401, detail="Session expired, please log in again")
+
+        return KitchenOwlClient(access_token=token)
+
+    # OIDC or forward-auth: use long-lived token from secrets store
     token = get_secret("kitchenowl_token")
     return KitchenOwlClient(access_token=token)

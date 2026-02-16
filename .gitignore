@@ -51,3 +51,8 @@ htmlcov/
 
 # AI assistant files
 CLAUDE.md
+.claude/
+
+# Personal/draft files
+post.txt
+*.draft

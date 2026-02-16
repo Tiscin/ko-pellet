@@ -203,6 +203,38 @@ textarea { resize: vertical; min-height: 100px; }
 .next-badge-name { font-weight: 600; color: var(--accent-color); }
 .next-badge-progress { color: var(--text-muted); }
 
+/* KitchenOwl Login Form */
+.ko-login-form {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 2rem;
+    margin-bottom: 1rem;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+}
+.ko-login-form p:first-child {
+    color: var(--text-secondary);
+    margin-bottom: 1.25rem;
+    font-size: 0.95rem;
+}
+.ko-login-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+.ko-login-form .btn {
+    width: 100%;
+}
+.ko-login-error {
+    color: var(--error-color);
+    font-size: 0.85rem;
+    margin-top: 0.75rem;
+}
+
 .hidden { display: none !important; }
 
 @media (max-width: 600px) {
