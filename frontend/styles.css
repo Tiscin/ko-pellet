@@ -113,6 +113,16 @@ textarea { resize: vertical; min-height: 100px; }
 .editable-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem; }
 .list-item { display: flex; gap: 0.5rem; align-items: flex-start; }
 .list-item input, .list-item textarea { flex: 1; }
+.list-item .ing-quantity { flex: 0 0 5rem; min-width: 0; }
+.list-item .ing-name { flex: 2; min-width: 0; }
+.list-item .ing-note { flex: 1; min-width: 0; }
+.ingredient-headers { display: flex; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.25rem; }
+.ingredient-headers span { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
+.ingredient-headers .ih-drag { width: 1.5rem; }
+.ingredient-headers .ih-qty { flex: 0 0 5rem; }
+.ingredient-headers .ih-name { flex: 2; }
+.ingredient-headers .ih-note { flex: 1; }
+.ingredient-headers .ih-rm { width: 2rem; }
 .list-item textarea { min-height: 60px; }
 .list-item .remove-btn { background: transparent; border: none; color: var(--error-color); cursor: pointer; padding: 0.5rem; opacity: 0.6; transition: opacity 0.2s ease; }
 .list-item .remove-btn:hover { opacity: 1; }

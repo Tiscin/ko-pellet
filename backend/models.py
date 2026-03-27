@@ -9,6 +9,7 @@ class Ingredient(BaseModel):
     name: str
     note: Optional[str] = None
     raw: Optional[str] = None  # Original text before parsing
+    optional: bool = False  # False = regular ingredient, True = optional
 
 
 class ParseConfidence(str, Enum):

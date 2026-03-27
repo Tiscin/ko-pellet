@@ -108,6 +108,7 @@ class KitchenOwlClient:
         for ing in recipe.ingredients:
             item = {
                 "name": ing.name,
+                "optional": ing.optional,
             }
             # Build description from quantity and unit
             desc_parts = []

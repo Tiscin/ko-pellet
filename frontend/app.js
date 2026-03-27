@@ -495,7 +495,15 @@ function showRecipePreview(recipe) {
     elements.editNotes.value = recipe.notes || '';
     elements.ingredientsList.innerHTML = '';
     if (recipe.ingredients && recipe.ingredients.length > 0) {
-        recipe.ingredients.forEach(ing => addIngredientRow(ing.raw || formatIngredient(ing)));
+        recipe.ingredients.forEach(ing => {
+            if (ing.name && (ing.quantity || ing.unit)) {
+                // Structured data from parser — use directly
+                addIngredientRow('', ing);
+            } else {
+                // Raw string — parse it
+                addIngredientRow(ing.raw || formatIngredient(ing));
+            }
+        });
     } else {
         addIngredientRow('');
     }
@@ -526,12 +534,56 @@ function formatIngredient(ing) {
     return parts.join(' ');
 }
 
-function addIngredientRow(value = '') {
+function addIngredientRow(value = '', structured = null) {
     const row = document.createElement('div');
     row.className = 'list-item';
-    row.innerHTML = `<span class="drag-handle">&#8942;&#8942;</span><input type="text" value="${escapeHtml(value)}" placeholder="e.g., 2 cups flour"><button type="button" class="remove-btn" title="Remove">&times;</button>`;
+    // If structured data provided, use it. Otherwise parse from raw string.
+    let qty = '', name = '', note = '', optional = false;
+    if (structured) {
+        qty = [structured.quantity, structured.unit].filter(Boolean).join(' ');
+        name = structured.name || '';
+        note = structured.note || '';
+        optional = structured.optional || false;
+    } else if (value) {
+        // Parse "2 cups flour (sifted)" into parts
+        const parsed = parseIngredientString(value);
+        qty = parsed.quantity;
+        name = parsed.name;
+        note = parsed.note;
+    }
+    row.innerHTML = `<span class="drag-handle">&#8942;&#8942;</span><input type="text" class="ing-quantity" value="${escapeHtml(qty)}" placeholder="2 cups"><input type="text" class="ing-name" value="${escapeHtml(name)}" placeholder="flour"><input type="text" class="ing-note" value="${escapeHtml(note)}" placeholder="note"><button type="button" class="remove-btn" title="Remove">&times;</button>`;
     row.querySelector('.remove-btn').addEventListener('click', () => row.remove());
     elements.ingredientsList.appendChild(row);
+}
+
+function parseIngredientString(raw) {
+    // Parse raw ingredient string like "2 cups flour (sifted)" or "70g Onions"
+    // Returns { quantity, name, note }
+    let text = raw.trim();
+    let note = '';
+
+    // Extract parenthetical note from end
+    const noteMatch = text.match(/\(([^)]+)\)\s*$/);
+    if (noteMatch) {
+        note = noteMatch[1];
+        text = text.substring(0, noteMatch.index).trim();
+    }
+
+    // Match quantity+unit at the start: "2 cups", "70g", "1/2 tsp", "3", "1.5 kg"
+    const qtyMatch = text.match(/^([\d./]+\s*(?:cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|kg|g|ml|l|liters?|litres?|quarts?|pints?|gallons?|cloves?|pieces?|slices?|cans?|sticks?|bunche?s?|heads?|stalks?|sprigs?|pinche?s?|dashe?s?|handfuls?|packages?|packets?|boxes?|bags?|jars?|bottles?|cups?|small|medium|large)?)\s+/i);
+
+    if (qtyMatch) {
+        return { quantity: qtyMatch[1].trim(), name: text.substring(qtyMatch[0].length).trim(), note };
+    }
+
+    // Check for bare number at start: "3 Tomatoes"
+    const bareNumMatch = text.match(/^([\d./]+)\s+/);
+    if (bareNumMatch) {
+        return { quantity: bareNumMatch[1], name: text.substring(bareNumMatch[0].length).trim(), note };
+    }
+
+    // No quantity detected — everything is the name
+    return { quantity: '', name: text, note };
 }
 
 function addInstructionRow(value = '') {
@@ -567,9 +619,29 @@ function initRecipeForm() {
         if (!isAuthenticated) { showToast('Please log in to save recipes', 'error'); return; }
         if (!selectedHouseholdId) { showToast('Please select a household in Settings first', 'error'); elements.settingsModal.classList.remove('hidden'); return; }
         const ingredients = [];
-        elements.ingredientsList.querySelectorAll('input').forEach(input => {
-            const val = input.value.trim();
-            if (val) ingredients.push({ name: val, raw: val });
+        elements.ingredientsList.querySelectorAll('.list-item').forEach(row => {
+            const qtyInput = row.querySelector('.ing-quantity');
+            const nameInput = row.querySelector('.ing-name');
+            const noteInput = row.querySelector('.ing-note');
+            if (!nameInput) return;
+            const name = nameInput.value.trim();
+            if (!name) return;
+            const qtyRaw = qtyInput ? qtyInput.value.trim() : '';
+            const note = noteInput ? noteInput.value.trim() : '';
+            // Split quantity field into quantity and unit: "2 cups" → quantity:"2", unit:"cups"
+            let quantity = null, unit = null;
+            if (qtyRaw) {
+                const parts = qtyRaw.match(/^([\d./]+)\s*(.*)$/);
+                if (parts) {
+                    quantity = parts[1];
+                    unit = parts[2] || null;
+                } else {
+                    // Non-numeric quantity like "a pinch"
+                    quantity = qtyRaw;
+                }
+            }
+            const raw = formatIngredient({ quantity, unit, name, note });
+            ingredients.push({ name, quantity, unit, note: note || null, raw, optional: false });
         });
         const instructions = [];
         elements.instructionsList.querySelectorAll('textarea').forEach(textarea => {
