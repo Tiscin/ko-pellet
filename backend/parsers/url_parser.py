@@ -91,7 +91,7 @@ async def parse_url(url: str) -> Recipe:
     # Fetch the page (disable redirects to prevent SSRF via redirect)
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
         response = await client.get(url, headers={
-            "User-Agent": "Mozilla/5.0 (compatible; ko-pellet/1.0; recipe importer)"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         })
 
         # Handle redirects manually with validation
@@ -107,7 +107,7 @@ async def parse_url(url: str) -> Recipe:
             # Validate redirect target
             validate_url(redirect_url)
             response = await client.get(redirect_url, headers={
-                "User-Agent": "Mozilla/5.0 (compatible; ko-pellet/1.0; recipe importer)"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             })
             redirect_count += 1
 
