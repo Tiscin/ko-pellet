@@ -158,6 +158,8 @@ class KitchenOwlClient:
         if recipe.image_url:
             payload["photo"] = recipe.image_url
 
+        logging.debug(f"Creating recipe with payload: {payload}")
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 f"{self.base_url}/api/household/{household_id}/recipe",
