@@ -96,6 +96,7 @@ docker compose up -d
 | `TRUSTED_PROXY_IPS` | No | Comma-separated IPs allowed to set forwarded headers (see Security section) |
 | `SECRET_KEY` | No | Session secret (auto-generated if not set) |
 | `ALLOWED_INTERNAL_HOSTS` | No | Comma-separated hostnames/IPs allowed for recipe URL imports (e.g., `recipes.local,ko.lan`) |
+| `ANTHROPIC_MODEL` | No | Anthropic model for AI text/image parsing (default: `claude-sonnet-5-5`) |
 | `DEBUG` | No | Enable debug mode |
 
 *Required only when using OIDC mode (not needed for forward-auth or KitchenOwl native auth)
@@ -109,6 +110,8 @@ After logging in, configure these in Settings → API Keys:
 - **OpenAI API Key**: Alternative AI provider
 
 Secrets are encrypted with AES-256-GCM and stored in `/data/secrets.json`.
+
+> **KitchenOwl status shows "Unexpected response: 422"?** KitchenOwl rejected the token with "Signature verification failed". That happens when KitchenOwl's `JWT_SECRET_KEY` changes (for example after redeploying KitchenOwl without the old value), which invalidates every existing long-lived token. Create a new long-lived token in KitchenOwl and save it in Settings → API Keys.
 
 ### Custom CA Certificates
 

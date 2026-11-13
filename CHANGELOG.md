@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.1] - 2026-11-12
+
+### Fixed
+
+- **AI parsing silently fell back to manual parsing** — the hardcoded model `claude-sonnet-4-20250514` was retired and every Anthropic call returned 404, so text parses came back low-confidence with empty fields and image parses failed. The parsers now default to `claude-sonnet-5-5`.
+- **Response handling for newer Claude models** — the parsers read only the `text` blocks of a response, because newer models can return thinking blocks before the answer.
+
+### Changed
+
+- **Configurable model** — set `ANTHROPIC_MODEL` to choose the Anthropic model used for text and image parsing (default `claude-sonnet-5-5`), so a future model retirement is a config change, not a code change.
+- **Browser User-Agent for URL imports** — recipe sites that block non-browser clients now return the page.
+
 ## [1.1.0] - 2026-03-27
 
 ### Fixed

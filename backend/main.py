@@ -65,7 +65,7 @@ from stats_store import (
     get_stats,
 )
 
-app = FastAPI(title="ko-pellet", version="1.0.0")
+app = FastAPI(title="ko-pellet", version="1.1.1")
 
 
 def get_client_ip(request: Request) -> str:
