@@ -6,6 +6,7 @@ from typing import Optional
 from models import Recipe, Ingredient, ParseConfidence
 from secrets_store import get_secret
 from parsers.text_parser import (
+    ANTHROPIC_MODEL,
     parse_text,
     EXTRACTION_PROMPT,
     _validate_parsed_data,
@@ -60,7 +61,7 @@ async def parse_with_anthropic_vision(image_data: bytes, mime_type: str) -> dict
     b64_image = base64.standard_b64encode(image_data).decode("utf-8")
 
     message = await client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=ANTHROPIC_MODEL,
         max_tokens=4096,
         messages=[
             {
@@ -83,7 +84,8 @@ async def parse_with_anthropic_vision(image_data: bytes, mime_type: str) -> dict
         ]
     )
 
-    response_text = message.content[0].text
+    # Newer models may return thinking blocks before the answer; keep only text blocks.
+    response_text = "".join(b.text for b in message.content if getattr(b, "type", None) == "text")
 
     # Extract JSON from response
     json_match = re.search(r"\{[\s\S]*\}", response_text)

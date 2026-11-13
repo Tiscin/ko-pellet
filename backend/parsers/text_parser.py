@@ -1,9 +1,13 @@
 import json
 import logging
+import os
 import re
 from typing import Optional
 from models import Recipe, Ingredient, ParseConfidence
 from secrets_store import get_secret
+
+# Anthropic model for AI parsing; override with ANTHROPIC_MODEL (old ids get retired and 404).
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5-5")
 
 # Output validation limits to prevent excessive data from AI responses
 MAX_INGREDIENTS = 200
@@ -55,14 +59,15 @@ async def parse_with_anthropic(text: str) -> dict:
     client = anthropic.AsyncAnthropic(api_key=api_key)
 
     message = await client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=ANTHROPIC_MODEL,
         max_tokens=4096,
         messages=[
             {"role": "user", "content": EXTRACTION_PROMPT + text}
         ]
     )
 
-    response_text = message.content[0].text
+    # Newer models may return thinking blocks before the answer; keep only text blocks.
+    response_text = "".join(b.text for b in message.content if getattr(b, "type", None) == "text")
 
     # Extract JSON from response
     json_match = re.search(r"\{[\s\S]*\}", response_text)
